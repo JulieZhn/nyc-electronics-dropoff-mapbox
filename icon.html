@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapbox class</title>
+    <link rel="stylesheet" href="reset.css">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.js"></script>
+</head>
+
+<style>
+    body {
+        font-size: 20px;
+        line-height: 1.4;
+    }
+
+    .container {
+        width: 600px;
+        margin: 40px auto 0 auto;
+    }
+
+    h1 {
+        font-size: 50px;
+        margin-bottom: 0px;
+        font-weight: bold;
+    }
+
+    h2 {
+        font-size: 35px;
+        margin-bottom: 40px;
+    }
+
+    .byline {
+        font-style: italic;
+        margin-bottom: 18px;
+    }
+
+    p {
+        margin-bottom: 18px;
+    }
+
+    #map {
+        width: 100%;
+        height: 500px;
+        background: yellow;
+        margin-bottom: 18px;
+    }
+
+    .mapboxgl-popup {
+        max-width: 400px;
+        font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+    }
+</style>
+
+<body>
+
+    <div class="container">
+        <h1>Which Police Precinct Has the Most Complaints?</h1>
+        <h2>Here is our subheadline</h2>
+        <p class="byline">By Julie Zhu</p>
+        <p>Lorem ipsum dolor sit amet consectetur, adipisicing elit. Cupiditate ea eligendi illo odit sed harum vel.
+            Officia quo soluta voluptatem earum odit esse voluptate, repudiandae, molestiae fugit libero laboriosam in.
+        </p>
+        <div id="map"></div>
+        <p>Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsum quas molestias mollitia ducimus, dolore
+            repudiandae, excepturi doloremque. Voluptas, voluptatibus, minima, vitae id aliquid fugiat quisquam
+            reprehenderit hic sunt iusto similique.</p>
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoianVsaWV6aHUyMjYiLCJhIjoiY2x5aGNsazQzMDFxcjJpcTE2dmRxNWxnZiJ9.6wSFId_GVwVWNknAmIFpZQ';
+
+        const map = new mapboxgl.Map({
+            container: 'map', // container ID, which is the div element we created in the HTML above
+            center: [-74.0060, 40.7128], // starting position [lng, lat]. This is New York City. Note that lat must be set between -90 and 90
+            zoom: 9, // the larger the number, the more specific view of the map;
+            style: 'mapbox://styles/juliezhu226/clyon2d66004l01qnch528ly0'
+        });
+
+        map.on('style.load', () => {
+            map.addSource('zipcode', {
+                type: 'geojson',
+                data: 'data/zipcode.geojson'
+            });
+
+            map.addLayer({
+                'id': 'zipcode',
+                'type': 'fill',
+                'source': 'zipcode',
+                'paint': {
+                    'fill-color': '#D3D3D3',
+                    'fill-opacity': 0.3,
+                    'fill-outline-color': '#A9A9A9'
+                }
+            });
+
+            map.addSource('electronics-drop', {
+                type: 'geojson',
+                data: 'data/electronics-drop.geojson'
+            });
+
+
+            var svgIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M135.2 17.7L128 32 32 32C14.3 32 0 46.3 0 64S14.3 96 32 96l384 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-96 0-7.2-14.3C307.4 6.8 296.3 0 284.2 0L163.8 0c-12.1 0-23.2 6.8-28.6 17.7zM416 128L32 128 53.2 467c1.6 25.3 22.6 45 47.9 45l245.8 0c25.3 0 46.3-19.7 47.9-45L416 128z"/></svg>';
+
+            // Convert SVG string to Blob object
+            var blob = new Blob([svgIcon], { type: 'image/svg+xml' });
+            var url = URL.createObjectURL(blob);
+
+            map.loadImage(url, function (error, image) {
+                if (error) throw error;
+
+                // Add the loaded image as a custom icon to the map
+                map.addImage('custom-icon', image);
+
+                map.addLayer({
+                    'id': 'electronics-drop',
+                    'type': 'symbol',
+                    'source': 'electronics-drop',
+                    'layout': {
+                        'icon-image': 'custom-icon',
+                        'icon-size': 0.5,
+                        'icon-allow-overlap': true,
+                        'icon-ignore-placement': true
+                    },
+                    'paint': {
+                        'circle-radius': 4,
+                        'circle-color': '#FFD700',
+                        'circle-stroke-color': 'white',
+                        'circle-stroke-width': 1
+                    }
+                });
+
+                const popup = new mapboxgl.Popup({
+                    closeButton: false,
+                    closeOnClick: false
+                });
+
+                map.on('mouseenter', 'zipcode', (e) => {
+                    // Change the cursor style as a UI indicator.
+                    map.getCanvas().style.cursor = 'pointer';
+
+                    // Copy coordinates array.
+                    const coordinates = e.features[0].geometry.coordinates.slice();
+                    const modzcta = e.features[0].properties.modzcta;
+
+                    // Ensure that if the map is zoomed out such that multiple
+                    // copies of the feature are visible, the popup appears
+                    // over the copy being pointed to.
+                    if (['mercator', 'equirectangular'].includes(map.getProjection().name)) {
+                        while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                            coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                        }
+                    }
+
+                    // Populate the popup and set its coordinates
+                    // based on the feature found.
+                    popup.setLngLat(e.lngLat).setHTML(modzcta).addTo(map);
+                });
+
+                map.on('mouseleave', 'zipcode', () => {
+                    map.getCanvas().style.cursor = '';
+                    popup.remove();
+                });
+
+                map.on('mouseenter', 'electronics-drop', (e) => {
+                    map.getCanvas().style.cursor = 'pointer';
+                    const coordinates = e.features[0].geometry.coordinates.slice();
+                    const SiteName = e.features[0].properties.SiteName;
+                    const SiteAddress = e.features[0].properties.SiteAddress;
+
+                    if (['mercator', 'equirectangular'].includes(map.getProjection().name)) {
+                        while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                            coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                        }
+                    }
+
+                    popup.setLngLat(coordinates).setHTML(SiteName + ', ' + SiteAddress).addTo(map);
+                });
+
+                map.on('mouseleave', 'electronics-drop', () => {
+                    map.getCanvas().style.cursor = '';
+                    popup.remove();
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>
